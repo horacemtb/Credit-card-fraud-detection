@@ -4,16 +4,10 @@
 # In[ ]:
 
 
-#!pip install pandarallel
-
-
-# In[2]:
-
-
 import os
 import sys
 import pickle
-import pyarrow as pa
+import glob
 
 import numpy as np
 import pandas as pd
@@ -113,7 +107,7 @@ def get_list_terminals_within_radius(customer_profile, x_y_terminals, r):
 # In[ ]:
 
 
-def generate_transactions_table(customer_profile, start_date):
+def generate_transactions_table(customer_profile, start_date, day=0):
     
     customer_transactions = []
     
@@ -148,15 +142,15 @@ def generate_transactions_table(customer_profile, start_date):
                         
                     terminal_id = random.choice(customer_profile.available_terminals)
                     
-                    customer_transactions.append([time_tx,
+                    customer_transactions.append([time_tx, day,
                                                   customer_profile.CUSTOMER_ID,
                                                   terminal_id, amount])
             
-    customer_transactions = pd.DataFrame(customer_transactions, columns=['TX_TIME_SECONDS', 'CUSTOMER_ID', 'TERMINAL_ID', 'TX_AMOUNT'])
+    customer_transactions = pd.DataFrame(customer_transactions, columns=['TX_TIME_SECONDS', 'TX_TIME_DAYS', 'CUSTOMER_ID', 'TERMINAL_ID', 'TX_AMOUNT'])
     
     if len(customer_transactions)>0:
         customer_transactions['TX_DATETIME'] = pd.to_datetime(customer_transactions["TX_TIME_SECONDS"], unit='s', origin=start_date)
-        customer_transactions=customer_transactions[['TX_DATETIME','CUSTOMER_ID', 'TERMINAL_ID', 'TX_AMOUNT','TX_TIME_SECONDS']]
+        customer_transactions=customer_transactions[['TX_DATETIME','CUSTOMER_ID', 'TERMINAL_ID', 'TX_AMOUNT','TX_TIME_SECONDS', 'TX_TIME_DAYS']]
     
     return customer_transactions
 
@@ -171,8 +165,8 @@ def add_frauds(customer_profiles_table, terminal_profiles_table, transactions_df
     transactions_df['TX_FRAUD_SCENARIO']=0
     
     # Scenario 1
-    transactions_df.loc[transactions_df.TX_AMOUNT>200, 'TX_FRAUD']=1
-    transactions_df.loc[transactions_df.TX_AMOUNT>200, 'TX_FRAUD_SCENARIO']=1
+    transactions_df.loc[transactions_df.TX_AMOUNT>220, 'TX_FRAUD']=1
+    transactions_df.loc[transactions_df.TX_AMOUNT>220, 'TX_FRAUD_SCENARIO']=1
     nb_frauds_scenario_1=transactions_df.TX_FRAUD.sum()
     print("Number of frauds from scenario 1: "+str(nb_frauds_scenario_1))
     
@@ -217,17 +211,19 @@ def add_frauds(customer_profiles_table, terminal_profiles_table, transactions_df
 def generate_dataset(customer_profiles_table, terminal_profiles_table, start_date="2018-01-01", r=5, start_index = 0):
     
     start_time=time.time()
+    
     x_y_terminals = terminal_profiles_table[['x_terminal_id','y_terminal_id']].values.astype(float)
-    #customer_profiles_table['available_terminals'] = customer_profiles_table.apply(lambda x : get_list_terminals_within_radius(x, x_y_terminals=x_y_terminals, r=r), axis=1)
+    customer_profiles_table['available_terminals'] = customer_profiles_table.apply(lambda x : get_list_terminals_within_radius(x, x_y_terminals=x_y_terminals, r=r), axis=1)
     # With Pandarallel
-    customer_profiles_table['available_terminals'] = customer_profiles_table.parallel_apply(lambda x : get_list_terminals_within_radius(x, x_y_terminals=x_y_terminals, r=r), axis=1)
+    #customer_profiles_table['available_terminals'] = customer_profiles_table.parallel_apply(lambda x : get_list_terminals_within_radius(x, x_y_terminals=x_y_terminals, r=r), axis=1)
     customer_profiles_table['nb_terminals']=customer_profiles_table.available_terminals.apply(len)
     print("Time to associate terminals to customers: {0:.2}s".format(time.time()-start_time))
     
     start_time=time.time()
-    #transactions_df=customer_profiles_table.groupby('CUSTOMER_ID').apply(lambda x : generate_transactions_table(x.iloc[0], start_date)).reset_index(drop=True)
+    
+    transactions_df=customer_profiles_table.groupby('CUSTOMER_ID').apply(lambda x : generate_transactions_table(x.iloc[0], start_date)).reset_index(drop=True)
     # With Pandarallel
-    transactions_df=customer_profiles_table.groupby('CUSTOMER_ID').parallel_apply(lambda x : generate_transactions_table(x.iloc[0], start_date)).reset_index(drop=True)
+    #transactions_df=customer_profiles_table.groupby('CUSTOMER_ID').parallel_apply(lambda x : generate_transactions_table(x.iloc[0], start_date)).reset_index(drop=True)
     print("Time to generate transactions: {0:.2}s".format(time.time()-start_time))
     
     # Sort transactions chronologically
@@ -247,7 +243,18 @@ def generate_dataset(customer_profiles_table, terminal_profiles_table, start_dat
 # In[ ]:
 
 
-DIR_OUTPUT = "/home/ubuntu/Fraud-detection/simulated-data-raw/"
+def seconds_until_midnight(last):
+    
+    tomorrow = last + datetime.timedelta(1)
+    midnight = datetime.datetime(year = tomorrow.year, month = tomorrow.month, day = tomorrow.day,
+                                hour = 0, minute = 0, second = 0)
+    return (midnight - last).seconds
+
+
+# In[ ]:
+
+
+DIR_OUTPUT = "/home/ubuntu/Fraud-detection/simulated-data-raw/" #"simulated-data-raw/"
 
 if not os.path.exists(DIR_OUTPUT):
     os.makedirs(DIR_OUTPUT)
@@ -256,22 +263,39 @@ if not os.path.exists(DIR_OUTPUT):
 # In[ ]:
 
 
-with open('/home/ubuntu/Fraud-detection/transaction_id.pickle', "rb") as f:
-    start_index = pickle.load(f)+1
+#get the latest slice of historical data
 
-customer_profiles_table = generate_customer_profiles_table(n_customers = 20000, random_state = np.random.randint(1, 1000))
-terminal_profiles_table = generate_terminal_profiles_table(n_terminals = 2000, random_state = np.random.randint(1, 1000))
+list_of_files = glob.glob(DIR_OUTPUT+'*')
+latest_file = max(list_of_files, key = os.path.getctime)
 
-today = datetime.datetime.today()
+with open(r"{}".format(latest_file), "rb") as input_file:
+    latest_data = pickle.load(input_file)
+
+
+# In[ ]:
+
+
+#today's date is the day after the latest historical slice
+
+today = latest_data.iloc[-1, :]['TX_DATETIME'] + datetime.timedelta(days=1)
+
+
+# In[ ]:
+
+
+N_CUSTOMERS = 10000
+N_TERMINALS = 1000
+
+customer_profiles_table = generate_customer_profiles_table(n_customers = N_CUSTOMERS, random_state = np.random.randint(1, 1000))
+terminal_profiles_table = generate_terminal_profiles_table(n_terminals = N_TERMINALS, random_state = np.random.randint(1, 1000))
+
 todays_date = f'{today.year}-{today.month}-{today.day}'
 
-transactions_df = generate_dataset(customer_profiles_table, 
-                                         terminal_profiles_table, 
-                                         start_date = todays_date, 
-                                         r=5,
-                                         start_index = start_index)
-
-print('Size MB: {}'.format(round(sys.getsizeof(transactions_df) / 1e6)))
+transactions_df = generate_dataset(customer_profiles_table,
+                                   terminal_profiles_table,
+                                   start_date = todays_date,
+                                   r=5,
+                                   start_index = 0)
 
 
 print(transactions_df.shape)
@@ -280,12 +304,21 @@ print(transactions_df.head(3))
 
 daily_transactions = transactions_df.sort_values('TX_TIME_SECONDS')
 
+#the following features start at the values of the latest historical slice
+daily_transactions.index += latest_data.index[-1]+1
+daily_transactions['TRANSACTION_ID'] += latest_data.iloc[-1, :]['TRANSACTION_ID']+1
+daily_transactions['TX_TIME_SECONDS'] += latest_data.iloc[-1, :]['TX_TIME_SECONDS']+seconds_until_midnight(latest_data.iloc[-1, :]['TX_DATETIME'])
+daily_transactions['TX_TIME_DAYS'] += latest_data.iloc[-1, :]['TX_TIME_DAYS']+1
+
+daily_transactions = daily_transactions[latest_data.columns]
+
+
+# In[ ]:
+
+
 filename_output = todays_date + '.pkl'
 
 daily_transactions.to_pickle(DIR_OUTPUT+filename_output)
-
-with open('/home/ubuntu/Fraud-detection/transaction_id.pickle', 'wb') as f:
-    pickle.dump(daily_transactions.tail(1).index[0], f)
 
 
 # In[ ]:
