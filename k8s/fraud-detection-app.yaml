@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fraud-service
+  labels:
+    app-label: fraud-detection-app-label
+  namespace: fraud-detection-namespace
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app-label: fraud-detection-app-label
+  template:
+    metadata:
+      labels:
+        app-label: fraud-detection-app-label
+    spec:
+      containers:
+      - name: fraud-detection-app
+        image: horacehub/fraud-detection-app:v1
+        ports:
+        - containerPort: 80
+        imagePullPolicy: Always
+
