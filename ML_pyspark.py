@@ -47,6 +47,7 @@ os.environ["MLFLOW_TRACKING_URI"] = "http://158.160.12.126:8000/"
 
 # In[7]:
 
+from IPython import get_ipython
 
 import sys
 import pickle

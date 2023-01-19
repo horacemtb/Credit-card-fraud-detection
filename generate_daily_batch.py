@@ -3,6 +3,7 @@
 
 # In[ ]:
 
+from IPython import get_ipython
 
 import os
 import sys

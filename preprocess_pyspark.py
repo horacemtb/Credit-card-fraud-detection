@@ -2,6 +2,8 @@ import findspark
 findspark.init()
 findspark.find()
 
+from IPython import get_ipython
+
 import os
 import sys
 import pickle
