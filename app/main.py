@@ -60,6 +60,7 @@ async def predict_tr(tr: Transaction):
         res['CUSTOMER_ID'] = int(res['CUSTOMER_ID'])
         res['TERMINAL_ID'] = int(res['TERMINAL_ID'])
         res['prediction'] = int(res['prediction'])
+        rec['test'] = 'test'
         
         tr.predictions = json.dumps(res)
     
