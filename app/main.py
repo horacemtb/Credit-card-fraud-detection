@@ -7,10 +7,13 @@ import pandas as pd
 
 from app.class_Transaction import Transaction
 from app.preprocess_new_transaction import preprocess_transaction
+from starlette_exporter import PrometheusMiddleware, handle_metrics
 
 logger.debug('Running app')
 
 app = FastAPI()
+app.add_middleware(PrometheusMiddleware)
+app.add_route("/metrics", handle_metrics)
 
 model_path = './app/models/RF.pickle'
 DIR_PROC = './app/proc-data/'
