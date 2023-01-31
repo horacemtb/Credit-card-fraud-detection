@@ -1,6 +1,6 @@
 import json
 from loguru import logger
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 import pickle
 
 import pandas as pd
@@ -68,5 +68,6 @@ async def predict_tr(tr: Transaction):
     
     except Exception as ex:
         logger.error(f'Error getting predictions in main.py: {ex}')
+        raise HTTPException(status_code = 400, detail = str(ex))
 
     return tr.predictions
