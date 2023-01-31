@@ -16,6 +16,9 @@ todays_date = f'{today.year}-{today.month}-{today.day}'
 new_sec = seconds_since_midnight()
 tr = generate_single_transaction(new_id, new_sec, new_day, todays_date, N_CUSTOMERS, N_TERMINALS, latest_data)
 
+#to trigger a bad request
+#tr['TERMINAL_ID'] += 1000000
+
 print(tr)
 
 r = requests.post('http://51.250.38.128:80/predict/', json={'transaction': tr})
