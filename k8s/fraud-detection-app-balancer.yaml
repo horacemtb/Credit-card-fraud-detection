@@ -7,9 +7,10 @@ metadata:
     app-label: fraud-detection-app-label
 spec:
   ports:
-    - port: 80
-      name: http
+    - name: fraud
+      port: 80
       targetPort: 80
+      protocol: TCP
   selector:
     app-label: fraud-detection-app-label
   type: LoadBalancer
